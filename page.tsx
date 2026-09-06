@@ -1,104 +1,129 @@
-import { notFound } from "next/navigation";
-import Link from "next/link";
+import ProductCard from "@/components/ProductCard";
 import { prisma } from "@/lib/prisma";
-import AddToCartButton from "@/components/AddToCartButton";
+import Link from "next/link";
 
-async function getProduct(id: string) {
+async function getProducts(category?: string, search?: string) {
   try {
-    const product = await prisma.product.findUnique({ where: { id } });
-    if (!product) return null;
-    return { ...product, price: Number(product.price) };
+    const where: any = {};
+    if (category) where.category = category;
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { description: { contains: search, mode: "insensitive" } },
+      ];
+    }
+
+    const products = await prisma.product.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+    });
+    return products.map((p) => ({
+      ...p,
+      price: Number(p.price),
+    }));
   } catch {
-    return null;
+    return [];
   }
 }
 
-export default async function ProductPage({
-  params,
+export default async function ProductsPage({
+  searchParams,
 }: {
-  params: { id: string };
+  searchParams: { category?: string; search?: string };
 }) {
-  const product = await getProduct(params.id);
-  if (!product) notFound();
+  const products = await getProducts(
+    searchParams.category,
+    searchParams.search
+  );
+
+  const categories = [
+    "All",
+    "Electronics",
+    "Accessories",
+    "Clothing",
+    "Home",
+  ];
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <Link
-        href="/products"
-        className="text-sm text-indigo-600 hover:text-indigo-700 mb-8 inline-block"
-      >
-        ← Back to products
-      </Link>
+      {/* Header */}
+      <div className="mb-10">
+        <h1 className="text-3xl font-bold text-gray-900">All Products</h1>
+        <p className="mt-2 text-gray-500">
+          {products.length} product{products.length !== 1 ? "s" : ""} available
+        </p>
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-        {/* Image */}
-        <div className="aspect-square rounded-2xl overflow-hidden bg-gray-100">
-          {product.image ? (
-            <img
-              src={product.image}
-              alt={product.name}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-gray-400">
-              No image
-            </div>
-          )}
+      {/* Search */}
+      <form className="mb-8" action="/products" method="GET">
+        <div className="relative max-w-md">
+          <input
+            type="text"
+            name="search"
+            defaultValue={searchParams.search || ""}
+            placeholder="Search products..."
+            className="w-full pl-4 pr-12 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
+          />
+          <button
+            type="submit"
+            className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition"
+          >
+            Search
+          </button>
         </div>
+        {searchParams.category && (
+          <input type="hidden" name="category" value={searchParams.category} />
+        )}
+      </form>
 
-        {/* Details */}
-        <div className="flex flex-col">
-          <p className="text-sm font-medium text-indigo-600 uppercase tracking-wide">
-            {product.category}
-          </p>
-          <h1 className="mt-2 text-3xl md:text-4xl font-bold text-gray-900">
-            {product.name}
-          </h1>
-          <p className="mt-4 text-3xl font-bold text-gray-900">
-            ${product.price.toFixed(2)}
-          </p>
+      {/* Category Filters */}
+      <div className="flex flex-wrap gap-2 mb-10">
+        {categories.map((cat) => {
+          const href =
+            cat === "All"
+              ? "/products"
+              : `/products?category=${encodeURIComponent(cat)}`;
+          const isActive =
+            (cat === "All" && !searchParams.category) ||
+            searchParams.category === cat;
 
-          <p className="mt-6 text-gray-600 leading-relaxed">
-            {product.description}
-          </p>
-
-          <div className="mt-6 flex items-center gap-4 text-sm">
-            <span
-              className={`inline-flex items-center px-2.5 py-1 rounded-full font-medium ${
-                product.stock > 0
-                  ? "bg-green-100 text-green-800"
-                  : "bg-red-100 text-red-800"
+          return (
+            <Link
+              key={cat}
+              href={href}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                isActive
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
-              {product.stock > 0
-                ? `${product.stock} in stock`
-                : "Out of stock"}
-            </span>
-            {product.featured && (
-              <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 font-medium">
-                Featured
-              </span>
-            )}
-          </div>
-
-          <div className="mt-10">
-            <AddToCartButton
-              productId={product.id}
-              disabled={product.stock === 0}
-            />
-          </div>
-
-          <div className="mt-10 pt-8 border-t border-gray-200">
-            <h3 className="font-semibold text-gray-900 mb-3">Why buy from us?</h3>
-            <ul className="space-y-2 text-sm text-gray-600">
-              <li>✓ Free shipping on orders over $100</li>
-              <li>✓ 30-day easy returns</li>
-              <li>✓ Secure payment with Stripe</li>
-              <li>✓ Quality guaranteed</li>
-            </ul>
-          </div>
-        </div>
+              {cat}
+            </Link>
+          );
+        })}
       </div>
+
+      {/* Products Grid */}
+      {products.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {products.map((product) => (
+            <ProductCard key={product.id} product={product} />
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-24 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+          <p className="text-gray-500 text-lg">No products found</p>
+          <p className="mt-2 text-sm text-gray-400">
+            Try a different search or category
+          </p>
+          <Link
+            href="/products"
+            className="mt-4 inline-block text-indigo-600 font-medium hover:text-indigo-700"
+          >
+            Clear filters →
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
