@@ -1,129 +1,140 @@
-import ProductCard from "@/components/ProductCard";
-import { prisma } from "@/lib/prisma";
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-async function getProducts(category?: string, search?: string) {
-  try {
-    const where: any = {};
-    if (category) where.category = category;
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: "insensitive" } },
-        { description: { contains: search, mode: "insensitive" } },
-      ];
+export default function RegisterPage() {
+  const router = useRouter();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setError(
+          typeof data.error === "string"
+            ? data.error
+            : "Registration failed"
+        );
+        return;
+      }
+
+      router.push("/");
+      router.refresh();
+    } catch {
+      setError("Something went wrong");
+    } finally {
+      setLoading(false);
     }
-
-    const products = await prisma.product.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-    });
-    return products.map((p) => ({
-      ...p,
-      price: Number(p.price),
-    }));
-  } catch {
-    return [];
-  }
-}
-
-export default async function ProductsPage({
-  searchParams,
-}: {
-  searchParams: { category?: string; search?: string };
-}) {
-  const products = await getProducts(
-    searchParams.category,
-    searchParams.search
-  );
-
-  const categories = [
-    "All",
-    "Electronics",
-    "Accessories",
-    "Clothing",
-    "Home",
-  ];
+  };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      {/* Header */}
-      <div className="mb-10">
-        <h1 className="text-3xl font-bold text-gray-900">All Products</h1>
-        <p className="mt-2 text-gray-500">
-          {products.length} product{products.length !== 1 ? "s" : ""} available
-        </p>
-      </div>
+    <div className="min-h-[70vh] flex items-center justify-center px-4 py-12">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Create account</h1>
+          <p className="mt-2 text-gray-500">Join ShopHub today</p>
+        </div>
 
-      {/* Search */}
-      <form className="mb-8" action="/products" method="GET">
-        <div className="relative max-w-md">
-          <input
-            type="text"
-            name="search"
-            defaultValue={searchParams.search || ""}
-            placeholder="Search products..."
-            className="w-full pl-4 pr-12 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
-          />
+        <form
+          onSubmit={handleSubmit}
+          className="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm space-y-5"
+        >
+          {error && (
+            <div className="bg-red-50 text-red-700 text-sm px-4 py-3 rounded-lg">
+              {error}
+            </div>
+          )}
+
+          <div>
+            <label
+              htmlFor="name"
+              className="block text-sm font-medium text-gray-700 mb-1.5"
+            >
+              Name
+            </label>
+            <input
+              id="name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
+              placeholder="John Doe"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="email"
+              className="block text-sm font-medium text-gray-700 mb-1.5"
+            >
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
+              placeholder="you@example.com"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-gray-700 mb-1.5"
+            >
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              required
+              minLength={6}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
+              placeholder="••••••••"
+            />
+            <p className="mt-1 text-xs text-gray-400">Minimum 6 characters</p>
+          </div>
+
           <button
             type="submit"
-            className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition"
+            disabled={loading}
+            className="w-full py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50"
           >
-            Search
+            {loading ? "Creating account..." : "Create account"}
           </button>
-        </div>
-        {searchParams.category && (
-          <input type="hidden" name="category" value={searchParams.category} />
-        )}
-      </form>
 
-      {/* Category Filters */}
-      <div className="flex flex-wrap gap-2 mb-10">
-        {categories.map((cat) => {
-          const href =
-            cat === "All"
-              ? "/products"
-              : `/products?category=${encodeURIComponent(cat)}`;
-          const isActive =
-            (cat === "All" && !searchParams.category) ||
-            searchParams.category === cat;
-
-          return (
+          <p className="text-center text-sm text-gray-500">
+            Already have an account?{" "}
             <Link
-              key={cat}
-              href={href}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                isActive
-                  ? "bg-indigo-600 text-white shadow-sm"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
+              href="/login"
+              className="text-indigo-600 font-medium hover:text-indigo-700"
             >
-              {cat}
+              Sign in
             </Link>
-          );
-        })}
-      </div>
-
-      {/* Products Grid */}
-      {products.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {products.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-24 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-          <p className="text-gray-500 text-lg">No products found</p>
-          <p className="mt-2 text-sm text-gray-400">
-            Try a different search or category
           </p>
-          <Link
-            href="/products"
-            className="mt-4 inline-block text-indigo-600 font-medium hover:text-indigo-700"
-          >
-            Clear filters →
-          </Link>
-        </div>
-      )}
+        </form>
+      </div>
     </div>
   );
 }
