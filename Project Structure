@@ -1,0 +1,15 @@
+├── prisma/
+│   ├── schema.prisma
+│   └── seed.ts
+├── src/
+│   ├── app/
+│   │   ├── api/          # Auth, products, cart, checkout
+│   │   ├── products/
+│   │   ├── cart/
+│   │   ├── login/
+│   │   └── register/
+│   ├── components/
+│   ├── lib/
+│   └── types/
+├── package.json
+└── README.md
