@@ -1,167 +1,205 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import ProductCard from "@/components/ProductCard";
-import { prisma } from "@/lib/prisma";
+import { Trash2, Minus, Plus, ShoppingBag } from "lucide-react";
+import type { CartItem } from "@/types";
 
-async function getFeaturedProducts() {
-  try {
-    const products = await prisma.product.findMany({
-      where: { featured: true },
-      take: 4,
-      orderBy: { createdAt: "desc" },
-    });
-    return products.map((p) => ({
-      ...p,
-      price: Number(p.price),
-    }));
-  } catch {
-    return [];
+export default function CartPage() {
+  const [items, setItems] = useState<CartItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [checkingOut, setCheckingOut] = useState(false);
+
+  const loadCart = async () => {
+    try {
+      const res = await fetch("/api/cart");
+      if (res.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      if (res.ok) {
+        const data = await res.json();
+        setItems(data);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCart();
+  }, []);
+
+  const updateQuantity = async (itemId: string, quantity: number) => {
+    try {
+      const res = await fetch("/api/cart", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId, quantity }),
+      });
+      if (res.ok) {
+        if (quantity === 0) {
+          setItems((prev) => prev.filter((i) => i.id !== itemId));
+        } else {
+          setItems((prev) =>
+            prev.map((i) => (i.id === itemId ? { ...i, quantity } : i))
+          );
+        }
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const removeItem = async (itemId: string) => {
+    await updateQuantity(itemId, 0);
+  };
+
+  const handleCheckout = async () => {
+    setCheckingOut(true);
+    try {
+      const res = await fetch("/api/checkout", { method: "POST" });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || "Checkout failed");
+        setCheckingOut(false);
+      }
+    } catch {
+      alert("Something went wrong");
+      setCheckingOut(false);
+    }
+  };
+
+  const subtotal = items.reduce(
+    (sum, item) => sum + item.product.price * item.quantity,
+    0
+  );
+
+  if (loading) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-20 text-center">
+        <p className="text-gray-500">Loading cart...</p>
+      </div>
+    );
   }
-}
 
-async function getCategories() {
-  try {
-    const products = await prisma.product.findMany({
-      select: { category: true },
-      distinct: ["category"],
-    });
-    return products.map((p) => p.category);
-  } catch {
-    return ["Electronics", "Accessories", "Clothing", "Home"];
+  if (items.length === 0) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-20 text-center">
+        <ShoppingBag className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">
+          Your cart is empty
+        </h1>
+        <p className="text-gray-500 mb-8">
+          Looks like you haven&apos;t added anything yet.
+        </p>
+        <Link
+          href="/products"
+          className="inline-flex items-center px-6 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition-colors"
+        >
+          Browse products
+        </Link>
+      </div>
+    );
   }
-}
-
-export default async function HomePage() {
-  const [featured, categories] = await Promise.all([
-    getFeaturedProducts(),
-    getCategories(),
-  ]);
 
   return (
-    <div>
-      {/* Hero Section */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 text-white">
-        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1600')] bg-cover bg-center opacity-20"></div>
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 md:py-36">
-          <div className="max-w-2xl">
-            <span className="inline-block px-3 py-1 mb-6 text-sm font-medium bg-white/20 rounded-full backdrop-blur-sm">
-              New Collection Available
-            </span>
-            <h1 className="text-4xl md:text-6xl font-bold tracking-tight leading-tight">
-              Discover products that elevate your everyday
-            </h1>
-            <p className="mt-6 text-lg md:text-xl text-indigo-100 max-w-lg">
-              Curated quality goods. Fast shipping. Secure checkout powered by
-              Stripe.
-            </p>
-            <div className="mt-10 flex flex-wrap gap-4">
-              <Link
-                href="/products"
-                className="inline-flex items-center justify-center px-8 py-3.5 text-base font-semibold rounded-xl bg-white text-indigo-700 hover:bg-indigo-50 transition-all shadow-lg hover:shadow-xl"
-              >
-                Shop Collection
-              </Link>
-              <Link
-                href="/register"
-                className="inline-flex items-center justify-center px-8 py-3.5 text-base font-semibold rounded-xl border-2 border-white/40 text-white hover:bg-white/10 transition-all"
-              >
-                Create Account
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <h1 className="text-3xl font-bold text-gray-900 mb-8">Shopping Cart</h1>
 
-      {/* Categories */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="flex flex-wrap justify-center gap-3">
-          {categories.map((category) => (
-            <Link
-              key={category}
-              href={`/products?category=${encodeURIComponent(category)}`}
-              className="px-5 py-2.5 rounded-full bg-gray-100 text-gray-700 text-sm font-medium hover:bg-indigo-600 hover:text-white transition-colors"
-            >
-              {category}
-            </Link>
-          ))}
-          <Link
-            href="/products"
-            className="px-5 py-2.5 rounded-full bg-indigo-50 text-indigo-700 text-sm font-medium hover:bg-indigo-600 hover:text-white transition-colors"
+      <div className="space-y-4">
+        {items.map((item) => (
+          <div
+            key={item.id}
+            className="flex gap-4 bg-white border border-gray-200 rounded-2xl p-4"
           >
-            View All →
-          </Link>
-        </div>
-      </section>
-
-      {/* Featured Products */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-20">
-        <div className="flex items-end justify-between mb-10">
-          <div>
-            <h2 className="text-3xl font-bold text-gray-900">Featured Products</h2>
-            <p className="mt-2 text-gray-500">
-              Hand-picked items we think you&apos;ll love
-            </p>
-          </div>
-          <Link
-            href="/products"
-            className="hidden sm:inline-flex text-sm font-medium text-indigo-600 hover:text-indigo-700"
-          >
-            View all products →
-          </Link>
-        </div>
-
-        {featured.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {featured.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-20 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-            <p className="text-gray-500 text-lg">No products yet</p>
-            <p className="mt-2 text-sm text-gray-400">
-              Run the seed script after setting up the database
-            </p>
-            <code className="mt-3 inline-block text-xs bg-gray-100 px-3 py-1.5 rounded text-gray-600">
-              npx prisma db push && npm run db:seed
-            </code>
-          </div>
-        )}
-      </section>
-
-      {/* Trust / Features */}
-      <section className="bg-gray-50 border-t border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10 text-center">
-            <div className="flex flex-col items-center">
-              <div className="w-14 h-14 rounded-2xl bg-indigo-100 flex items-center justify-center text-2xl mb-4">
-                🚚
-              </div>
-              <h3 className="font-semibold text-gray-900 text-lg">Free Shipping</h3>
-              <p className="mt-2 text-sm text-gray-500 max-w-xs">
-                Free delivery on all orders over $100. Fast and reliable shipping.
-              </p>
+            <div className="w-24 h-24 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+              {item.product.image ? (
+                <img
+                  src={item.product.image}
+                  alt={item.product.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
+                  No image
+                </div>
+              )}
             </div>
-            <div className="flex flex-col items-center">
-              <div className="w-14 h-14 rounded-2xl bg-indigo-100 flex items-center justify-center text-2xl mb-4">
-                🔒
-              </div>
-              <h3 className="font-semibold text-gray-900 text-lg">Secure Checkout</h3>
-              <p className="mt-2 text-sm text-gray-500 max-w-xs">
-                Payments powered by Stripe. Your data is always protected.
+
+            <div className="flex-1 min-w-0">
+              <Link
+                href={`/products/${item.product.id}`}
+                className="font-semibold text-gray-900 hover:text-indigo-600 line-clamp-1"
+              >
+                {item.product.name}
+              </Link>
+              <p className="text-sm text-gray-500 mt-0.5">
+                ${item.product.price.toFixed(2)} each
               </p>
-            </div>
-            <div className="flex flex-col items-center">
-              <div className="w-14 h-14 rounded-2xl bg-indigo-100 flex items-center justify-center text-2xl mb-4">
-                ↩️
+
+              <div className="mt-3 flex items-center gap-3">
+                <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden">
+                  <button
+                    onClick={() =>
+                      updateQuantity(item.id, Math.max(0, item.quantity - 1))
+                    }
+                    className="p-1.5 hover:bg-gray-50"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="px-3 text-sm font-medium">
+                    {item.quantity}
+                  </span>
+                  <button
+                    onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                    className="p-1.5 hover:bg-gray-50"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => removeItem(item.id)}
+                  className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
-              <h3 className="font-semibold text-gray-900 text-lg">Easy Returns</h3>
-              <p className="mt-2 text-sm text-gray-500 max-w-xs">
-                30-day money-back guarantee. No questions asked.
+            </div>
+
+            <div className="text-right">
+              <p className="font-semibold text-gray-900">
+                ${(item.product.price * item.quantity).toFixed(2)}
               </p>
             </div>
           </div>
+        ))}
+      </div>
+
+      {/* Summary */}
+      <div className="mt-8 bg-white border border-gray-200 rounded-2xl p-6">
+        <div className="flex justify-between text-lg mb-4">
+          <span className="text-gray-600">Subtotal</span>
+          <span className="font-bold text-gray-900">
+            ${subtotal.toFixed(2)}
+          </span>
         </div>
-      </section>
+        <p className="text-sm text-gray-500 mb-6">
+          Shipping and taxes calculated at checkout.
+        </p>
+        <button
+          onClick={handleCheckout}
+          disabled={checkingOut}
+          className="w-full py-3.5 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50"
+        >
+          {checkingOut ? "Redirecting to Stripe..." : "Proceed to checkout"}
+        </button>
+      </div>
     </div>
   );
 }
